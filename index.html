@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -9,10 +10,6 @@
       margin: 20px;
       background-color: #f9f9f9;
       color: #333;
-    }
-    h1 {
-      font-size: 24px;
-      margin-bottom: 15px;
     }
     label {
       margin-right: 8px;
@@ -61,7 +58,7 @@
       background-color: #f2f2f2;
       font-weight: bold;
     }
-    /* Cabeçalho fixo para a tabela */
+    /* Cabeçalho fixo */
     thead th {
       position: sticky;
       top: 0;
@@ -80,22 +77,130 @@
     #search-input {
       width: 250px;
     }
+    /* Modal overlay */
+    #modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+      z-index: 1000;
+    }
+    #modal-content {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      max-height: 90%;
+      overflow-y: auto;
+      width: 90%;
+    }
+    #modal-content h3 {
+      margin-top: 15px;
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+    #modal-close {
+      float: right;
+      background-color: #dc3545;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #121212;
+        color: #eee;
+      }
+      select,
+      input[type="file"],
+      input[type="text"],
+      button {
+        background-color: #333;
+        color: #eee;
+        border: 1px solid #555;
+      }
+      button {
+        background-color: #0d6efd;
+        color: #fff;
+        border: none;
+      }
+      button:disabled {
+        background-color: #555;
+        color: #aaa;
+      }
+      table {
+        border: 1px solid #555;
+      }
+      th {
+        background-color: #333;
+        color: #fff;
+      }
+      td {
+        border: 1px solid #555;
+      }
+      #modal-content {
+        background-color: #222;
+        color: #eee;
+      }
+      #modal-close {
+        background-color: #c82333;
+      }
+    }
   </style>
 </head>
 <body>
-  <label for="file-type">Tipo de Arquivo:</label>
-  <select id="file-type">
+  <div class="file-inputs">
+    <div>
+      <label for="agencias-file">Agências:</label>
+      <input type="file" id="agencias-file" accept=".txt" />
+      <span id="status-AGENCIAS"></span>
+    </div>
+    <div>
+      <label for="contas-file">Contas:</label>
+      <input type="file" id="contas-file" accept=".txt" />
+      <span id="status-CONTAS"></span>
+    </div>
+    <div>
+      <label for="titulares-file">Titulares:</label>
+      <input type="file" id="titulares-file" accept=".txt" />
+      <span id="status-TITULARES"></span>
+    </div>
+    <div>
+      <label for="extrato-file">Extrato:</label>
+      <input type="file" id="extrato-file" accept=".txt" />
+      <span id="status-EXTRATO"></span>
+    </div>
+    <div>
+      <label for="od-file">Origem/Destino:</label>
+      <input type="file" id="od-file" accept=".txt" />
+      <span id="status-ORIGEM_DESTINO"></span>
+    </div>
+
+    <!-- Botão único para carregar todos os arquivos selecionados -->
+    <div style="margin-top: 10px;">
+      <button id="load-all">Carregar</button>
+    </div>
+  </div>
+  <hr />
+  <label for="view-select">Visualizar dados:</label>
+  <select id="view-select">
+    <option value="" disabled selected>Selecione...</option>
     <option value="AGENCIAS">Agências</option>
     <option value="CONTAS">Contas</option>
     <option value="TITULARES">Titulares</option>
     <option value="EXTRATO">Extrato</option>
     <option value="ORIGEM_DESTINO">Origem/Destino</option>
   </select>
-  <label for="file-input">Selecionar arquivo (TXT):</label>
-  <input type="file" id="file-input" accept=".txt" />
-  <button id="load-button">Carregar</button>
-  <button id="privacy-button">Privacidade</button>
-  <br /><br />
   <label for="search-input">Buscar:</label>
   <input type="text" id="search-input" placeholder="Buscar..." />
   <label for="page-size">Linhas por página:</label>
@@ -107,302 +212,124 @@
   </select>
   <div id="table-container"></div>
   <div id="pagination"></div>
+  <div id="filter-container" style="margin-top: 10px;"></div>
+
+  <!-- Modal overlay for details -->
+  <div id="modal-overlay" style="display: none;">
+    <div id="modal-content">
+      <button id="modal-close">Fechar</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
 
   <script>
-    // Mapeamento dos cabeçalhos de acordo com cada tipo de arquivo
+    // Estruturas globais para armazenar dados por tipo de arquivo
+    const data = {
+      AGENCIAS: [],
+      CONTAS: [],
+      TITULARES: [],
+      EXTRATO: [],
+      ORIGEM_DESTINO: [],
+    };
+    const loaded = {
+      AGENCIAS: false,
+      CONTAS: false,
+      TITULARES: false,
+      EXTRATO: false,
+      ORIGEM_DESTINO: false,
+    };
+    const selectedFiles = {
+      AGENCIAS: null,
+      CONTAS: null,
+      TITULARES: null,
+      EXTRATO: null,
+      ORIGEM_DESTINO: null,
+    };
+    // Cabeçalhos de cada tipo
     const headers = {
       AGENCIAS: [
-        "Número Banco",
-        "Número Agência",
-        "Nome da Agência",
-        "Endereço Logradouro",
-        "Endereço Cidade",
-        "Endereço UF",
-        "Endereço País",
-        "Endereço CEP",
-        "Telefone Agência",
-        "Data Abertura Agência",
-        "Data Fechamento Agência",
+        'Número Banco',
+        'Número Agência',
+        'Nome da Agência',
+        'Endereço Logradouro',
+        'Endereço Cidade',
+        'Endereço UF',
+        'Endereço País',
+        'Endereço CEP',
+        'Telefone Agência',
+        'Data Abertura Agência',
+        'Data Fechamento Agência',
       ],
       CONTAS: [
-        "Número Banco",
-        "Número Agência",
-        "Número Conta",
-        "Tipo Conta",
-        "Data Abertura Conta",
-        "Data Encerramento Conta",
-        "Movimentação Conta",
+        'Número Banco',
+        'Número Agência',
+        'Número Conta',
+        'Tipo Conta',
+        'Data Abertura Conta',
+        'Data Encerramento Conta',
+        'Movimentação Conta',
       ],
       TITULARES: [
-        "Número Banco",
-        "Número Agência",
-        "Número Conta",
-        "Tipo Conta",
-        "Tipo Titular",
-        "Pessoa Investigada",
-        "Tipo Pessoa Titular",
-        "CPF/CNPJ Titular",
-        "Nome Titular",
-        "Nome Documento Identificação",
-        "Número Documento Identificação",
-        "Endereço Logradouro",
-        "Endereço Cidade",
-        "Endereço UF",
-        "Endereço País",
-        "Endereço CEP",
-        "Telefone Pessoa",
-        "Valor Renda",
-        "Data Atualização Renda",
-        "Data Início Relacionamento",
-        "Data Fim Relacionamento",
+        'Número Banco',
+        'Número Agência',
+        'Número Conta',
+        'Tipo Conta',
+        'Tipo Titular',
+        'Pessoa Investigada',
+        'Tipo Pessoa Titular',
+        'CPF/CNPJ Titular',
+        'Nome Titular',
+        'Nome Documento Identificação',
+        'Número Documento Identificação',
+        'Endereço Logradouro',
+        'Endereço Cidade',
+        'Endereço UF',
+        'Endereço País',
+        'Endereço CEP',
+        'Telefone Pessoa',
+        'Valor Renda',
+        'Data Atualização Renda',
+        'Data Início Relacionamento',
+        'Data Fim Relacionamento',
       ],
       EXTRATO: [
-        "Código Chave Extrato",
-        "Número Banco",
-        "Número Agência",
-        "Número Conta",
-        "Tipo Conta",
-        "Data Lançamento",
-        "Número Documento",
-        "Descrição Lançamento",
-        "Tipo Lançamento",
-        "Valor Lançamento",
-        "Natureza Lançamento",
-        "Valor Saldo",
-        "Natureza Saldo",
-        "Local Transação",
+        'Código Chave Extrato',
+        'Número Banco',
+        'Número Agência',
+        'Número Conta',
+        'Tipo Conta',
+        'Data Lançamento',
+        'Número Documento',
+        'Descrição Lançamento',
+        'Tipo Lançamento',
+        'Valor Lançamento',
+        'Natureza Lançamento',
+        'Valor Saldo',
+        'Natureza Saldo',
+        'Local Transação',
       ],
       ORIGEM_DESTINO: [
-        "Código Chave OD",
-        "Código Chave Extrato",
-        "Valor Transação",
-        "Número Documento Transação",
-        "Número Banco OD",
-        "Número Agência OD",
-        "Número Conta OD",
-        "Tipo Conta OD",
-        "Tipo Pessoa OD",
-        "CPF/CNPJ OD",
-        "Nome Pessoa OD",
-        "Nome Documento Identificação OD",
-        "Número Documento Identificação OD",
-        "Código de Barras",
-        "Nome Endossante Cheque",
-        "Doc Endossante Cheque",
-        "Situação Identificação",
-        "Observação",
+        'Código Chave OD',
+        'Código Chave Extrato',
+        'Valor Transação',
+        'Número Documento Transação',
+        'Número Banco OD',
+        'Número Agência OD',
+        'Número Conta OD',
+        'Tipo Conta OD',
+        'Tipo Pessoa OD',
+        'CPF/CNPJ OD',
+        'Nome Pessoa OD',
+        'Nome Documento Identificação OD',
+        'Número Documento Identificação OD',
+        'Código de Barras',
+        'Nome Endossante Cheque',
+        'Doc Endossante Cheque',
+        'Situação Identificação',
+        'Observação',
       ],
     };
-
-    const fileInput = document.getElementById('file-input');
-    const loadButton = document.getElementById('load-button');
-    const privacyButton = document.getElementById('privacy-button');
-    const fileTypeSelect = document.getElementById('file-type');
-    const searchInput = document.getElementById('search-input');
-    const tableContainer = document.getElementById('table-container');
-    const paginationDiv = document.getElementById('pagination');
-    const pageSizeSelect = document.getElementById('page-size');
-
-    let allRows = [];
-    let filteredRows = [];
-    let currentPage = 1;
-    // Quantidade de linhas por página. Será atualizada pelo seletor.
-    let pageSize = parseInt(pageSizeSelect.value, 10);
-    let selectedFile = null;
-
-    fileInput.addEventListener('change', (event) => {
-      // Apenas armazena o arquivo selecionado; não carrega automaticamente.
-      selectedFile = event.target.files[0] || null;
-    });
-    loadButton.addEventListener('click', handleLoadClick);
-    privacyButton.addEventListener('click', showPrivacyNotice);
-    fileTypeSelect.addEventListener('change', handleFileTypeChange);
-    searchInput.addEventListener('input', handleSearch);
-    pageSizeSelect.addEventListener('change', handlePageSizeChange);
-
-    function handleLoadClick() {
-      if (!selectedFile) return;
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const content = e.target.result;
-        parseFile(content);
-      };
-      reader.readAsText(selectedFile, 'UTF-8');
-    }
-
-    function showPrivacyNotice() {
-      alert(
-        'Esta ferramenta funciona completamente localmente, sem qualquer dado enviado a servidores, com todos os dados sendo mantidos e processados apenas em seu navegador.\n' +
-          'Para maior segurança, baixe essa página (Ctrl + S ou Cmd + S) e execute-a diretamente de seu computador.\n' +
-          'Se preferir, realize este procedimento em um computador sem conexão à internet.'
-      );
-    }
-
-    function handleFileTypeChange() {
-      // Apenas redesenha tabela se já houver dados carregados
-      if (allRows.length > 0) {
-        currentPage = 1;
-        handleSearch();
-      }
-    }
-
-    function handlePageSizeChange() {
-      const newSize = parseInt(pageSizeSelect.value, 10);
-      if (!isNaN(newSize) && newSize > 0) {
-        pageSize = newSize;
-        currentPage = 1;
-        renderTable();
-      }
-    }
-
-    function handleSearch() {
-      const term = searchInput.value.trim().toLowerCase();
-      if (term) {
-        filteredRows = allRows.filter((row) =>
-          row.some((cell) => cell.toLowerCase().includes(term))
-        );
-      } else {
-        filteredRows = allRows.slice();
-      }
-      currentPage = 1;
-      renderTable();
-    }
-
-    function parseFile(content) {
-      const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
-      allRows = lines.map((line) => line.split('\t'));
-      filteredRows = allRows.slice();
-      currentPage = 1;
-      renderTable();
-    }
-
-    function renderTable() {
-      const type = fileTypeSelect.value;
-      const headerRow = headers[type] || [];
-      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-      if (currentPage > totalPages) currentPage = totalPages;
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const pageRows = filteredRows.slice(startIndex, endIndex);
-      // Constrói a tabela
-      let tableHtml = '<table><thead><tr>';
-      headerRow.forEach((header) => {
-        tableHtml += `<th>${escapeHtml(header)}</th>`;
-      });
-      tableHtml += '</tr></thead><tbody>';
-      pageRows.forEach((row) => {
-        tableHtml += '<tr>';
-        // Preenche até a quantidade de cabeçalhos; campos excedentes são ignorados, faltantes ficam vazios
-        for (let i = 0; i < headerRow.length; i++) {
-          const cellValue = row[i] !== undefined ? row[i] : '';
-          const formatted = applyMappings(type, i, cellValue);
-          tableHtml += `<td>${escapeHtml(formatted)}</td>`;
-        }
-        tableHtml += '</tr>';
-      });
-      tableHtml += '</tbody></table>';
-      tableContainer.innerHTML = tableHtml;
-      renderPagination(totalPages);
-    }
-
-    function renderPagination(totalPages) {
-      let html = '';
-      if (totalPages > 1) {
-        // Botões de navegação: primeira e anterior
-        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(1)">Primeira</button>`;
-        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
-        // Informação de página
-        html += `<span id="page-info">Página ${currentPage} de ${totalPages}</span>`;
-        // Botões de navegação: próxima e última
-        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
-        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${totalPages})">Última</button>`;
-        // Botão para ir a uma página específica
-        html += `<button onclick="goToPagePrompt(${totalPages})">Ir para página...</button>`;
-      } else if (totalPages === 1) {
-        html += `<span id="page-info">Página 1 de 1</span>`;
-      }
-      paginationDiv.innerHTML = html;
-    }
-
-    // Exposta no escopo global para ser chamada a partir de atributos onclick
-    window.changePage = function (newPage) {
-      currentPage = newPage;
-      renderTable();
-    };
-
-    // Função para permitir que o usuário informe o número da página via prompt
-    window.goToPagePrompt = function (totalPages) {
-      const input = prompt('Digite o número da página (1 - ' + totalPages + '):');
-      if (input === null) return;
-      const num = parseInt(input, 10);
-      if (!isNaN(num) && num >= 1 && num <= totalPages) {
-        currentPage = num;
-        renderTable();
-      } else {
-        alert('Número de página inválido.');
-      }
-    };
-
-    // Mapeamento de índices de campos que devem ser tratados como datas (ddmmaaaa)
-    const dateFields = {
-      AGENCIAS: [9, 10], // Data abertura, data fechamento
-      CONTAS: [4, 5], // Data abertura, data encerramento
-      TITULARES: [18, 19, 20], // Data atualização renda, início relacionamento, fim relacionamento
-      EXTRATO: [5], // Data lançamento
-      ORIGEM_DESTINO: [], // Sem datas
-    };
-
-    // Mapeamento de índices de campos monetários (valores com duas casas decimais) para formatação
-    const monetaryFields = {
-      TITULARES: [17], // Valor Renda
-      EXTRATO: [9, 11], // Valor Lançamento, Valor Saldo
-      ORIGEM_DESTINO: [2], // Valor Transação
-      CONTAS: [],
-      AGENCIAS: [],
-    };
-
-    // Formata valores monetários colocando separadores de milhar e vírgula decimal
-    function formatMonetaryIfApplicable(type, index, value) {
-      if (!value) return value;
-      const indices = monetaryFields[type] || [];
-      if (!indices.includes(index)) return value;
-      // Remove espaços
-      let str = value.trim();
-      // Identifica negativo
-      let negative = false;
-      if (str.startsWith('-')) {
-        negative = true;
-        str = str.substring(1);
-      }
-      // Remove milhares e converte vírgulas para ponto
-      const cleaned = str.replace(/\./g, '').replace(/,/g, '.');
-      let num = parseFloat(cleaned);
-      if (isNaN(num)) return value;
-      // Se original não tinha separador decimal e for grande, assume centavos
-      if (!/[.,]/.test(str) && str.length > 3) {
-        num = num / 100;
-      }
-      const parts = num.toFixed(2).split('.');
-      const intPart = parts[0];
-      const decPart = parts[1];
-      const intWithSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      return (negative ? '-' : '') + intWithSep + ',' + decPart;
-    }
-
-    // Formata datas no formato DD/MM/AAAA quando apropriado
-    function formatDateIfApplicable(type, index, value) {
-      if (!value) return value;
-      const indices = dateFields[type] || [];
-      if (indices.includes(index) && /^\d{8}$/.test(value)) {
-        const dd = value.substring(0, 2);
-        const mm = value.substring(2, 4);
-        const yyyy = value.substring(4, 8);
-        return dd + '/' + mm + '/' + yyyy;
-      }
-      return value;
-    }
-
-    // Mapeamento de códigos para significados
+    // Mapeamentos de códigos para descrições
     const tipoContaMap = {
       '1': 'Corrente',
       '2': 'Poupança',
@@ -434,7 +361,6 @@
     const situacaoIdentMap = {
       '0': 'Fixo: sempre 0',
     };
-    // Mapeamento para tipos de titular
     function mapTipoTitular(value) {
       if (!value) return value;
       if (value === 'T') return 'Titular';
@@ -442,14 +368,11 @@
       if (value === 'L') return 'Representante Legal';
       if (value === 'P') return 'Procurador';
       if (value === 'O') return 'Outros';
-      // Se for número, assume cotitular
       if (!isNaN(parseInt(value, 10))) {
         return `${value}º cotitular`;
       }
       return value;
     }
-
-    // Mapeamento para tipo de lançamento (códigos 101-122 e 201-219)
     const tipoLancamentoMap = {
       '101': 'Cheques',
       '102': 'Encargos',
@@ -472,7 +395,6 @@
       '120': 'Transferência interbancária (débito)',
       '121': 'Antecipação a fornecedores',
       '122': 'OCAEROPS',
-      // Créditos
       '201': 'Depósitos',
       '202': 'Líquido de cobrança',
       '203': 'Devolução de cheque',
@@ -493,40 +415,486 @@
       '218': 'Pagamentos diversos (crédito)',
       '219': 'Pagamentos salariais (crédito)',
     };
-
-    function applyMappings(type, index, value) {
-      // Não mapeia valores vazios
+    // Campos que são datas
+    const dateFields = {
+      AGENCIAS: [9, 10],
+      CONTAS: [4, 5],
+      TITULARES: [18, 19, 20],
+      EXTRATO: [5],
+      ORIGEM_DESTINO: [],
+    };
+    // Campos monetários
+    const monetaryFields = {
+      TITULARES: [17],
+      EXTRATO: [9, 11],
+      ORIGEM_DESTINO: [2],
+      CONTAS: [],
+      AGENCIAS: [],
+    };
+    // Conversão data
+    function formatDateIfApplicable(type, index, value) {
       if (!value) return value;
-      // Formata datas e valores monetários primeiro se aplicável
+      const indices = dateFields[type] || [];
+      if (indices.includes(index) && /^\d{8}$/.test(value)) {
+        const dd = value.substring(0, 2);
+        const mm = value.substring(2, 4);
+        const yyyy = value.substring(4, 8);
+        return `${dd}/${mm}/${yyyy}`;
+      }
+      return value;
+    }
+    // Conversão monetária
+    function formatMonetaryIfApplicable(type, index, value) {
+      if (!value) return value;
+      const indices = monetaryFields[type] || [];
+      if (!indices.includes(index)) return value;
+      let str = value.trim();
+      let negative = false;
+      if (str.startsWith('-')) {
+        negative = true;
+        str = str.substring(1);
+      }
+      const cleaned = str.replace(/\./g, '').replace(/,/g, '.');
+      let num = parseFloat(cleaned);
+      if (isNaN(num)) return value;
+      if (!/[.,]/.test(str) && str.length > 3) {
+        num = num / 100;
+      }
+      const parts = num.toFixed(2).split('.');
+      const intPart = parts[0];
+      const decPart = parts[1];
+      const intWithSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return (negative ? '-' : '') + intWithSep + ',' + decPart;
+    }
+    // Aplica mapeamentos e formatação em um valor
+    function applyMappings(type, index, value) {
+      if (!value) return value;
+      // Primeiro formata datas e valores monetários
       let formatted = formatDateIfApplicable(type, index, value);
       formatted = formatMonetaryIfApplicable(type, index, formatted);
+      // Depois aplica mapeamentos específicos
       switch (type) {
         case 'CONTAS':
-          if (index === 3) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
-          if (index === 6) formatted = formatted + (movimentacaoContaMap[formatted] ? ` (${movimentacaoContaMap[formatted]})` : '');
+          if (index === 3) formatted += tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '';
+          if (index === 6) formatted += movimentacaoContaMap[formatted] ? ` (${movimentacaoContaMap[formatted]})` : '';
           return formatted;
         case 'TITULARES':
-          if (index === 3) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
+          if (index === 3) formatted += tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '';
           if (index === 4) formatted = mapTipoTitular(formatted);
-          if (index === 5) formatted = formatted + (pessoaInvestigadaMap[formatted] ? ` (${pessoaInvestigadaMap[formatted]})` : '');
-          if (index === 6) formatted = formatted + (tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '');
+          if (index === 5) formatted += pessoaInvestigadaMap[formatted] ? ` (${pessoaInvestigadaMap[formatted]})` : '';
+          if (index === 6) formatted += tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '';
           return formatted;
         case 'EXTRATO':
-          if (index === 4) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
-          if (index === 8) formatted = formatted + (tipoLancamentoMap[formatted] ? ` (${tipoLancamentoMap[formatted]})` : '');
-          if (index === 10) formatted = formatted + (naturezaLancamentoMap[formatted] ? ` (${naturezaLancamentoMap[formatted]})` : '');
-          if (index === 12) formatted = formatted + (naturezaSaldoMap[formatted] ? ` (${naturezaSaldoMap[formatted]})` : '');
+          if (index === 4) formatted += tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '';
+          if (index === 8) formatted += tipoLancamentoMap[formatted] ? ` (${tipoLancamentoMap[formatted]})` : '';
+          if (index === 10) formatted += naturezaLancamentoMap[formatted] ? ` (${naturezaLancamentoMap[formatted]})` : '';
+          if (index === 12) formatted += naturezaSaldoMap[formatted] ? ` (${naturezaSaldoMap[formatted]})` : '';
           return formatted;
         case 'ORIGEM_DESTINO':
-          if (index === 7) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
-          if (index === 8) formatted = formatted + (tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '');
-          if (index === 16) formatted = formatted + (situacaoIdentMap[formatted] ? ` (${situacaoIdentMap[formatted]})` : '');
+          if (index === 7) formatted += tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '';
+          if (index === 8) formatted += tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '';
+          if (index === 16) formatted += situacaoIdentMap[formatted] ? ` (${situacaoIdentMap[formatted]})` : '';
           return formatted;
         default:
           return formatted;
       }
     }
 
+    // Verifica se uma linha atende aos critérios de filtro para o tipo
+    function matchesFilters(type, row) {
+      const crit = filterCriteria[type] || {};
+      switch (type) {
+        case 'EXTRATO':
+          if (crit.tipoLancamento && row[8] !== crit.tipoLancamento) return false;
+          if (crit.naturezaLancamento && row[10] !== crit.naturezaLancamento) return false;
+          if (crit.tipoConta && row[4] !== crit.tipoConta) return false;
+          return true;
+        case 'ORIGEM_DESTINO':
+          if (crit.tipoPessoa && row[8] !== crit.tipoPessoa) return false;
+          if (crit.tipoConta && row[7] !== crit.tipoConta) return false;
+          if (crit.banco && row[4] !== crit.banco) return false;
+          return true;
+        case 'CONTAS':
+          if (crit.tipoConta && row[3] !== crit.tipoConta) return false;
+          if (crit.movimentacao && row[6] !== crit.movimentacao) return false;
+          return true;
+        case 'TITULARES':
+          if (crit.tipoTitular && row[4] !== crit.tipoTitular) return false;
+          if (crit.pessoaInvestigada && row[5] !== crit.pessoaInvestigada) return false;
+          if (crit.tipoPessoa && row[6] !== crit.tipoPessoa) return false;
+          return true;
+        case 'AGENCIAS':
+          if (crit.uf && row[5] !== crit.uf) return false;
+          return true;
+        default:
+          return true;
+      }
+    }
+
+    // Obtém resumo da contraparte para linha de extrato (banco, agência, conta, nome e CPF/CNPJ)
+    function getCounterpartSummary(extratoRow) {
+      if (!extratoRow) return '';
+      const chave = extratoRow[0];
+      // Filtra as linhas de origem/destino vinculadas à chave, mas exclui a própria conta da linha de extrato
+      const destRows = data.ORIGEM_DESTINO.filter((row) => {
+        if (row[1] !== chave) return false;
+        // Excluir quando banco/agência/conta da origem/destino for igual à conta do lançamento
+        return !(row[4] === extratoRow[1] && row[5] === extratoRow[2] && row[6] === extratoRow[3]);
+      });
+      if (destRows.length === 0) return '';
+      const summaries = destRows.map((dest) => {
+        const banco = dest[4] || '';
+        const agencia = dest[5] || '';
+        const conta = dest[6] || '';
+        const nome = dest[10] || '';
+        const cpfcnpj = dest[9] || '';
+        return `Banco ${banco} Ag ${agencia} Conta ${conta} - ${nome} (${cpfcnpj})`;
+      });
+      return summaries.join(' ; ');
+    }
+    // Resumo de origem/destino: contraparte
+    function getOriginDestSummary(row) {
+      const banco = row[4] || '';
+      const agencia = row[5] || '';
+      const conta = row[6] || '';
+      const nome = row[10] || '';
+      const cpfcnpj = row[9] || '';
+      return `Banco ${banco} Ag ${agencia} Conta ${conta} - ${nome} (${cpfcnpj})`;
+    }
+    // Resumo de titulares para uma conta (lista de nomes e CPF/CNPJ)
+    function getContaTitularesSummary(contaRow) {
+      const banco = contaRow[0];
+      const agencia = contaRow[1];
+      const conta = contaRow[2];
+      const titList = data.TITULARES.filter(
+        (row) => row[0] === banco && row[1] === agencia && row[2] === conta
+      );
+      if (titList.length === 0) return '';
+      const summaries = titList.map((tit) => {
+        const nome = tit[8] || '';
+        const cpfcnpj = tit[6] || '';
+        return `${nome} (${cpfcnpj})`;
+      });
+      return summaries.join(' ; ');
+    }
+    // Resumo de contas por agência (número de contas)
+    function getAgenciaResumo(agenciaRow) {
+      const banco = agenciaRow[0];
+      const agencia = agenciaRow[1];
+      const count = data.CONTAS.filter(
+        (row) => row[0] === banco && row[1] === agencia
+      ).length;
+      return count + ' conta' + (count === 1 ? '' : 's');
+    }
+    // Tratamento de seleção de arquivos
+    document.getElementById('agencias-file').addEventListener('change', function (e) {
+      selectedFiles.AGENCIAS = e.target.files[0] || null;
+    });
+    document.getElementById('contas-file').addEventListener('change', function (e) {
+      selectedFiles.CONTAS = e.target.files[0] || null;
+    });
+    document.getElementById('titulares-file').addEventListener('change', function (e) {
+      selectedFiles.TITULARES = e.target.files[0] || null;
+    });
+    document.getElementById('extrato-file').addEventListener('change', function (e) {
+      selectedFiles.EXTRATO = e.target.files[0] || null;
+    });
+    document.getElementById('od-file').addEventListener('change', function (e) {
+      selectedFiles.ORIGEM_DESTINO = e.target.files[0] || null;
+    });
+    // Função para carregar arquivo de determinado tipo
+    function loadFile(type) {
+      const file = selectedFiles[type];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        parseFile(type, e.target.result);
+        loaded[type] = true;
+        document.getElementById('status-' + type).textContent = `(${data[type].length} registros carregados)`;
+        // Se este tipo está atualmente selecionado na visualização, atualiza a tabela
+        if (document.getElementById('view-select').value === type) {
+          currentPage = 1;
+          handleSearch();
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+    // Associar botão único de carregar todos os arquivos
+    document.getElementById('load-all').addEventListener('click', function () {
+      // Carrega apenas os arquivos selecionados
+      const types = ['AGENCIAS', 'CONTAS', 'TITULARES', 'EXTRATO', 'ORIGEM_DESTINO'];
+      types.forEach((t) => {
+        if (selectedFiles[t]) {
+          loadFile(t);
+        }
+      });
+      // Após carregar, se houver tipo selecionado na visualização, atualiza filtros e a tabela
+      const viewType = document.getElementById('view-select').value;
+      if (viewType) {
+        currentPage = 1;
+        updateFilters(viewType);
+        handleSearch();
+      }
+    });
+    // Parse do conteúdo do arquivo, separando por tab e linha, e armazenando em data
+    function parseFile(type, content) {
+      const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+      const rows = lines.map((line) => line.split('\t'));
+      data[type] = rows;
+    }
+    // Variáveis para controle de exibição
+    let filteredRows = [];
+    let currentPage = 1;
+    let pageSize = parseInt(document.getElementById('page-size').value, 10);
+    // Critérios de filtro dinâmico por tipo
+    const filterCriteria = {
+      AGENCIAS: {},
+      CONTAS: {},
+      TITULARES: {},
+      EXTRATO: {},
+      ORIGEM_DESTINO: {},
+    };
+    // Eventos de UI
+    document.getElementById('view-select').addEventListener('change', function () {
+      currentPage = 1;
+      updateFilters(this.value);
+      handleSearch();
+    });
+    document.getElementById('search-input').addEventListener('input', function () {
+      currentPage = 1;
+      handleSearch();
+    });
+    document.getElementById('page-size').addEventListener('change', function () {
+      pageSize = parseInt(this.value, 10);
+      currentPage = 1;
+      renderTable();
+    });
+
+    // Atualiza controles de filtro dinamicamente para cada tipo de visualização
+    function updateFilters(type) {
+      const container = document.getElementById('filter-container');
+      container.innerHTML = '';
+      // Limpa critérios existentes
+      filterCriteria[type] = {};
+      if (!type || !loaded[type]) return;
+      // Utilitário para criar filtro
+      function createSelectFilter(labelText, options, propKey) {
+        const labelEl = document.createElement('label');
+        labelEl.textContent = labelText + ':';
+        labelEl.style.marginRight = '8px';
+        const selectEl = document.createElement('select');
+        selectEl.style.marginRight = '10px';
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = 'Todos';
+        selectEl.appendChild(defaultOpt);
+        options.forEach((opt) => {
+          const optionEl = document.createElement('option');
+          optionEl.value = opt.value;
+          optionEl.textContent = opt.text;
+          selectEl.appendChild(optionEl);
+        });
+        selectEl.addEventListener('change', function () {
+          filterCriteria[type][propKey] = this.value;
+          currentPage = 1;
+          handleSearch();
+        });
+        container.appendChild(labelEl);
+        container.appendChild(selectEl);
+      }
+      // Construir filtros de acordo com o tipo
+      switch (type) {
+        case 'EXTRATO': {
+          // Tipo de Lançamento (campo 8)
+          const codes = Array.from(new Set(data.EXTRATO.map((row) => row[8])));
+          const tipoLancOpts = codes.map((code) => ({
+            value: code,
+            text: code + (tipoLancamentoMap[code] ? ' - ' + tipoLancamentoMap[code] : ''),
+          })).sort((a, b) => (a.value > b.value ? 1 : -1));
+          createSelectFilter('Tipo Lançamento', tipoLancOpts, 'tipoLancamento');
+          // Natureza (campo 10)
+          const natCodes = Array.from(new Set(data.EXTRATO.map((row) => row[10])));
+          const natOpts = natCodes.map((code) => ({
+            value: code,
+            text: naturezaLancamentoMap[code] || code,
+          }));
+          createSelectFilter('Natureza Lançamento', natOpts, 'naturezaLancamento');
+          // Tipo Conta (campo 4)
+          const tipoContCodes = Array.from(new Set(data.EXTRATO.map((row) => row[4])));
+          const tipoContOpts = tipoContCodes.map((code) => ({
+            value: code,
+            text: code + (tipoContaMap[code] ? ' - ' + tipoContaMap[code] : ''),
+          }));
+          createSelectFilter('Tipo Conta', tipoContOpts, 'tipoConta');
+          break;
+        }
+        case 'ORIGEM_DESTINO': {
+          // Tipo Pessoa (campo 8)
+          const tpCodes = Array.from(new Set(data.ORIGEM_DESTINO.map((row) => row[8])));
+          const tpOpts = tpCodes.map((code) => ({ value: code, text: tipoPessoaMap[code] || code }));
+          createSelectFilter('Tipo Pessoa', tpOpts, 'tipoPessoa');
+          // Tipo Conta (campo 7)
+          const tcCodes = Array.from(new Set(data.ORIGEM_DESTINO.map((row) => row[7])));
+          const tcOpts = tcCodes.map((code) => ({ value: code, text: code + (tipoContaMap[code] ? ' - ' + tipoContaMap[code] : '') }));
+          createSelectFilter('Tipo Conta', tcOpts, 'tipoConta');
+          // Banco (campo 4)
+          const bancos = Array.from(new Set(data.ORIGEM_DESTINO.map((row) => row[4])));
+          const bancoOpts = bancos.map((code) => ({ value: code, text: code }));
+          createSelectFilter('Banco', bancoOpts, 'banco');
+          break;
+        }
+        case 'CONTAS': {
+          // Tipo Conta (campo 3)
+          const tcodes = Array.from(new Set(data.CONTAS.map((row) => row[3])));
+          const tOpts = tcodes.map((code) => ({ value: code, text: code + (tipoContaMap[code] ? ' - ' + tipoContaMap[code] : '') }));
+          createSelectFilter('Tipo Conta', tOpts, 'tipoConta');
+          // Movimentação (campo 6)
+          const mCodes = Array.from(new Set(data.CONTAS.map((row) => row[6])));
+          const mOpts = mCodes.map((code) => ({ value: code, text: code + (movimentacaoContaMap[code] ? ' - ' + movimentacaoContaMap[code] : '') }));
+          createSelectFilter('Movimentação', mOpts, 'movimentacao');
+          break;
+        }
+        case 'TITULARES': {
+          // Tipo Titular (campo 4)
+          const ttCodes = Array.from(new Set(data.TITULARES.map((row) => row[4])));
+          const ttOpts = ttCodes.map((code) => ({ value: code, text: mapTipoTitular(code) }));
+          createSelectFilter('Tipo Titular', ttOpts, 'tipoTitular');
+          // Pessoa Investigada (campo 5)
+          const piCodes = Array.from(new Set(data.TITULARES.map((row) => row[5])));
+          const piOpts = piCodes.map((code) => ({ value: code, text: pessoaInvestigadaMap[code] || code }));
+          createSelectFilter('Pessoa Investigada', piOpts, 'pessoaInvestigada');
+          // Tipo Pessoa (campo 6)
+          const tpTitCodes = Array.from(new Set(data.TITULARES.map((row) => row[6])));
+          const tpTitOpts = tpTitCodes.map((code) => ({ value: code, text: tipoPessoaMap[code] || code }));
+          createSelectFilter('Tipo Pessoa', tpTitOpts, 'tipoPessoa');
+          break;
+        }
+        case 'AGENCIAS': {
+          // UF (campo 5)
+          const ufCodes = Array.from(new Set(data.AGENCIAS.map((row) => row[5])));
+          const ufOpts = ufCodes.map((code) => ({ value: code, text: code }));
+          createSelectFilter('UF', ufOpts, 'uf');
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    // Busca com filtro
+    function handleSearch() {
+      const type = document.getElementById('view-select').value;
+      if (!type) {
+        document.getElementById('table-container').innerHTML = '';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+      const term = document.getElementById('search-input').value.trim().toLowerCase();
+      const allRows = data[type];
+      if (!allRows || !loaded[type]) {
+        document.getElementById('table-container').innerHTML = '<p>Arquivo ainda não carregado.</p>';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+      // Aplicar busca e filtros
+      filteredRows = allRows.filter((row) => {
+        // Filtro de texto
+        let matchesTerm = true;
+        if (term) {
+          matchesTerm = row.some((cell) => cell.toLowerCase().includes(term));
+        }
+        if (!matchesTerm) return false;
+        // Filtros adicionais
+        return matchesFilters(type, row);
+      });
+      renderTable();
+    }
+    // Renderiza a tabela de acordo com dataset e página
+    function renderTable() {
+      const type = document.getElementById('view-select').value;
+      if (!type) return;
+      const baseHeader = headers[type] || [];
+      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const pageRows = filteredRows.slice(startIndex, endIndex);
+      // Construir cabeçalho estendido conforme o tipo
+      const extendedHeader = baseHeader.slice();
+      if (type === 'EXTRATO') {
+        extendedHeader.push('Contraparte');
+        extendedHeader.push('Detalhes');
+      } else if (type === 'ORIGEM_DESTINO') {
+        extendedHeader.push('Resumo Contraparte');
+      } else if (type === 'CONTAS') {
+        extendedHeader.push('Titulares');
+      } else if (type === 'AGENCIAS') {
+        extendedHeader.push('Total de Contas');
+      }
+      let tableHtml = '<table><thead><tr>';
+      extendedHeader.forEach((header) => {
+        tableHtml += `<th>${escapeHtml(header)}</th>`;
+      });
+      tableHtml += '</tr></thead><tbody>';
+      pageRows.forEach((row, rowIndex) => {
+        tableHtml += '<tr>';
+        for (let i = 0; i < baseHeader.length; i++) {
+          const cellValue = row[i] !== undefined ? row[i] : '';
+          const formatted = applyMappings(type, i, cellValue);
+          tableHtml += `<td>${escapeHtml(formatted)}</td>`;
+        }
+        // Colunas extras
+        if (type === 'EXTRATO') {
+          const counterpart = getCounterpartSummary(row);
+          tableHtml += `<td>${escapeHtml(counterpart)}</td>`;
+          const globalIndex = (currentPage - 1) * pageSize + rowIndex;
+          tableHtml += `<td><button onclick="showDetails('${type}', ${globalIndex})">Ver</button></td>`;
+        } else if (type === 'ORIGEM_DESTINO') {
+          const summary = getOriginDestSummary(row);
+          tableHtml += `<td>${escapeHtml(summary)}</td>`;
+        } else if (type === 'CONTAS') {
+          const summary = getContaTitularesSummary(row);
+          tableHtml += `<td>${escapeHtml(summary)}</td>`;
+        } else if (type === 'AGENCIAS') {
+          const summary = getAgenciaResumo(row);
+          tableHtml += `<td>${escapeHtml(summary)}</td>`;
+        }
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table>';
+      document.getElementById('table-container').innerHTML = tableHtml;
+      renderPagination(totalPages);
+    }
+    // Paginação com botões
+    function renderPagination(totalPages) {
+      let html = '';
+      if (totalPages > 1) {
+        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(1)">Primeira</button>`;
+        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
+        html += `<span id="page-info">Página ${currentPage} de ${totalPages}</span>`;
+        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
+        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${totalPages})">Última</button>`;
+        html += `<button onclick="goToPagePrompt(${totalPages})">Ir para página...</button>`;
+      } else if (totalPages === 1) {
+        html += `<span id="page-info">Página 1 de 1</span>`;
+      }
+      document.getElementById('pagination').innerHTML = html;
+    }
+    window.changePage = function (newPage) {
+      currentPage = newPage;
+      renderTable();
+    };
+    window.goToPagePrompt = function (totalPages) {
+      const input = prompt('Digite o número da página (1 - ' + totalPages + '):');
+      if (input === null) return;
+      const num = parseInt(input, 10);
+      if (!isNaN(num) && num >= 1 && num <= totalPages) {
+        currentPage = num;
+        renderTable();
+      } else {
+        alert('Número de página inválido.');
+      }
+    };
+    // Escape HTML simples
     function escapeHtml(text) {
       const map = {
         '&': '&amp;',
@@ -537,6 +905,88 @@
       };
       return text.replace(/[&<>"']/g, (m) => map[m]);
     }
+    // Mostrar detalhes de um registro (apenas Extrato)
+    window.showDetails = function (type, index) {
+      if (type !== 'EXTRATO') return;
+      const extratoRow = data.EXTRATO[index];
+      if (!extratoRow) return;
+      // Encontrar lançamentos origem/destino relacionados
+      const chaveExtrato = extratoRow[0];
+      const origemDestList = data.ORIGEM_DESTINO.filter((row) => row[1] === chaveExtrato);
+      // Encontrar conta associada (numBanco, numAgencia, numConta)
+      const contaList = data.CONTAS.filter(
+        (row) => row[0] === extratoRow[1] && row[1] === extratoRow[2] && row[2] === extratoRow[3]
+      );
+      // Encontrar agência associada
+      const agenciaList = data.AGENCIAS.filter(
+        (row) => row[0] === extratoRow[1] && row[1] === extratoRow[2]
+      );
+      // Encontrar titulares associadas
+      const titularList = data.TITULARES.filter(
+        (row) => row[0] === extratoRow[1] && row[1] === extratoRow[2] && row[2] === extratoRow[3]
+      );
+      // Construir HTML
+      let html = '';
+      // Detalhe extrato
+      html += '<h3>Extrato</h3>';
+      html += buildTableHtml('EXTRATO', [extratoRow]);
+      // Relacionados origem/destino
+      html += '<h3>Lançamentos Origem/Destino vinculados</h3>';
+      if (origemDestList.length > 0) {
+        html += buildTableHtml('ORIGEM_DESTINO', origemDestList);
+      } else {
+        html += '<p>Nenhum registro de origem/destino relacionado.</p>';
+      }
+      // Conta
+      html += '<h3>Conta(s) associada(s)</h3>';
+      if (contaList.length > 0) {
+        html += buildTableHtml('CONTAS', contaList);
+      } else {
+        html += '<p>Nenhuma conta encontrada.</p>';
+      }
+      // Agência
+      html += '<h3>Agência(s) associada(s)</h3>';
+      if (agenciaList.length > 0) {
+        html += buildTableHtml('AGENCIAS', agenciaList);
+      } else {
+        html += '<p>Nenhuma agência encontrada.</p>';
+      }
+      // Titulares
+      html += '<h3>Titular(es) da conta</h3>';
+      if (titularList.length > 0) {
+        html += buildTableHtml('TITULARES', titularList);
+      } else {
+        html += '<p>Nenhum titular encontrado.</p>';
+      }
+      document.getElementById('modal-body').innerHTML = html;
+      document.getElementById('modal-overlay').style.display = 'flex';
+    };
+    // Construir tabela HTML para modal (sem coluna de detalhes)
+    function buildTableHtml(type, rows) {
+      let html = '<table><thead><tr>';
+      const headerRow = headers[type];
+      headerRow.forEach((header) => {
+        html += `<th>${escapeHtml(header)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+      rows.forEach((row) => {
+        html += '<tr>';
+        for (let i = 0; i < headerRow.length; i++) {
+          const cellValue = row[i] !== undefined ? row[i] : '';
+          const formatted = applyMappings(type, i, cellValue);
+          html += `<td>${escapeHtml(formatted)}</td>`;
+        }
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      return html;
+    }
+    // Fechar modal
+    document.getElementById('modal-close').addEventListener('click', function () {
+      document.getElementById('modal-overlay').style.display = 'none';
+    });
+    // Inicializar vazio
+    handleSearch();
   </script>
 </body>
 </html>
