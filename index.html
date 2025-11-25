@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>SimbaView - Visualizador de Arquivos de Afastamento de Sigilo Bancário</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+    label {
+      margin-right: 8px;
+      font-weight: bold;
+    }
+    select,
+    input[type="file"],
+    input[type="text"],
+    button {
+      margin-right: 10px;
+      padding: 6px 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #fff;
+      color: #333;
+    }
+    button {
+      cursor: pointer;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+    button:disabled {
+      background-color: #ccc;
+      color: #666;
+      cursor: not-allowed;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+      border: 1px solid #ddd;
+    }
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+    /* Cabeçalho fixo para a tabela */
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    #pagination {
+      margin-top: 12px;
+    }
+    #pagination button {
+      margin: 0 3px;
+      padding: 6px 12px;
+    }
+    #page-info {
+      margin-left: 10px;
+    }
+    #search-input {
+      width: 250px;
+    }
+  </style>
+</head>
+<body>
+  <label for="file-type">Tipo de Arquivo:</label>
+  <select id="file-type">
+    <option value="AGENCIAS">Agências</option>
+    <option value="CONTAS">Contas</option>
+    <option value="TITULARES">Titulares</option>
+    <option value="EXTRATO">Extrato</option>
+    <option value="ORIGEM_DESTINO">Origem/Destino</option>
+  </select>
+  <label for="file-input">Selecionar arquivo (TXT):</label>
+  <input type="file" id="file-input" accept=".txt" />
+  <button id="load-button">Carregar</button>
+  <button id="privacy-button">Privacidade</button>
+  <br /><br />
+  <label for="search-input">Buscar:</label>
+  <input type="text" id="search-input" placeholder="Buscar..." />
+  <label for="page-size">Linhas por página:</label>
+  <select id="page-size">
+    <option value="10">10</option>
+    <option value="20" selected>20</option>
+    <option value="50">50</option>
+    <option value="100">100</option>
+  </select>
+  <div id="table-container"></div>
+  <div id="pagination"></div>
+
+  <script>
+    // Mapeamento dos cabeçalhos de acordo com cada tipo de arquivo
+    const headers = {
+      AGENCIAS: [
+        "Número Banco",
+        "Número Agência",
+        "Nome da Agência",
+        "Endereço Logradouro",
+        "Endereço Cidade",
+        "Endereço UF",
+        "Endereço País",
+        "Endereço CEP",
+        "Telefone Agência",
+        "Data Abertura Agência",
+        "Data Fechamento Agência",
+      ],
+      CONTAS: [
+        "Número Banco",
+        "Número Agência",
+        "Número Conta",
+        "Tipo Conta",
+        "Data Abertura Conta",
+        "Data Encerramento Conta",
+        "Movimentação Conta",
+      ],
+      TITULARES: [
+        "Número Banco",
+        "Número Agência",
+        "Número Conta",
+        "Tipo Conta",
+        "Tipo Titular",
+        "Pessoa Investigada",
+        "Tipo Pessoa Titular",
+        "CPF/CNPJ Titular",
+        "Nome Titular",
+        "Nome Documento Identificação",
+        "Número Documento Identificação",
+        "Endereço Logradouro",
+        "Endereço Cidade",
+        "Endereço UF",
+        "Endereço País",
+        "Endereço CEP",
+        "Telefone Pessoa",
+        "Valor Renda",
+        "Data Atualização Renda",
+        "Data Início Relacionamento",
+        "Data Fim Relacionamento",
+      ],
+      EXTRATO: [
+        "Código Chave Extrato",
+        "Número Banco",
+        "Número Agência",
+        "Número Conta",
+        "Tipo Conta",
+        "Data Lançamento",
+        "Número Documento",
+        "Descrição Lançamento",
+        "Tipo Lançamento",
+        "Valor Lançamento",
+        "Natureza Lançamento",
+        "Valor Saldo",
+        "Natureza Saldo",
+        "Local Transação",
+      ],
+      ORIGEM_DESTINO: [
+        "Código Chave OD",
+        "Código Chave Extrato",
+        "Valor Transação",
+        "Número Documento Transação",
+        "Número Banco OD",
+        "Número Agência OD",
+        "Número Conta OD",
+        "Tipo Conta OD",
+        "Tipo Pessoa OD",
+        "CPF/CNPJ OD",
+        "Nome Pessoa OD",
+        "Nome Documento Identificação OD",
+        "Número Documento Identificação OD",
+        "Código de Barras",
+        "Nome Endossante Cheque",
+        "Doc Endossante Cheque",
+        "Situação Identificação",
+        "Observação",
+      ],
+    };
+
+    const fileInput = document.getElementById('file-input');
+    const loadButton = document.getElementById('load-button');
+    const privacyButton = document.getElementById('privacy-button');
+    const fileTypeSelect = document.getElementById('file-type');
+    const searchInput = document.getElementById('search-input');
+    const tableContainer = document.getElementById('table-container');
+    const paginationDiv = document.getElementById('pagination');
+    const pageSizeSelect = document.getElementById('page-size');
+
+    let allRows = [];
+    let filteredRows = [];
+    let currentPage = 1;
+    // Quantidade de linhas por página. Será atualizada pelo seletor.
+    let pageSize = parseInt(pageSizeSelect.value, 10);
+    let selectedFile = null;
+
+    fileInput.addEventListener('change', (event) => {
+      // Apenas armazena o arquivo selecionado; não carrega automaticamente.
+      selectedFile = event.target.files[0] || null;
+    });
+    loadButton.addEventListener('click', handleLoadClick);
+    privacyButton.addEventListener('click', showPrivacyNotice);
+    fileTypeSelect.addEventListener('change', handleFileTypeChange);
+    searchInput.addEventListener('input', handleSearch);
+    pageSizeSelect.addEventListener('change', handlePageSizeChange);
+
+    function handleLoadClick() {
+      if (!selectedFile) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const content = e.target.result;
+        parseFile(content);
+      };
+      reader.readAsText(selectedFile, 'UTF-8');
+    }
+
+    function showPrivacyNotice() {
+      alert(
+        'Esta ferramenta funciona completamente localmente, sem qualquer dado enviado a servidores, com todos os dados sendo mantidos e processados apenas em seu navegador.\n' +
+          'Para maior segurança, baixe essa página (Ctrl + S ou Cmd + S) e execute-a diretamente de seu computador.\n' +
+          'Se preferir, realize este procedimento em um computador sem conexão à internet.'
+      );
+    }
+
+    function handleFileTypeChange() {
+      // Apenas redesenha tabela se já houver dados carregados
+      if (allRows.length > 0) {
+        currentPage = 1;
+        handleSearch();
+      }
+    }
+
+    function handlePageSizeChange() {
+      const newSize = parseInt(pageSizeSelect.value, 10);
+      if (!isNaN(newSize) && newSize > 0) {
+        pageSize = newSize;
+        currentPage = 1;
+        renderTable();
+      }
+    }
+
+    function handleSearch() {
+      const term = searchInput.value.trim().toLowerCase();
+      if (term) {
+        filteredRows = allRows.filter((row) =>
+          row.some((cell) => cell.toLowerCase().includes(term))
+        );
+      } else {
+        filteredRows = allRows.slice();
+      }
+      currentPage = 1;
+      renderTable();
+    }
+
+    function parseFile(content) {
+      const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+      allRows = lines.map((line) => line.split('\t'));
+      filteredRows = allRows.slice();
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderTable() {
+      const type = fileTypeSelect.value;
+      const headerRow = headers[type] || [];
+      const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const pageRows = filteredRows.slice(startIndex, endIndex);
+      // Constrói a tabela
+      let tableHtml = '<table><thead><tr>';
+      headerRow.forEach((header) => {
+        tableHtml += `<th>${escapeHtml(header)}</th>`;
+      });
+      tableHtml += '</tr></thead><tbody>';
+      pageRows.forEach((row) => {
+        tableHtml += '<tr>';
+        // Preenche até a quantidade de cabeçalhos; campos excedentes são ignorados, faltantes ficam vazios
+        for (let i = 0; i < headerRow.length; i++) {
+          const cellValue = row[i] !== undefined ? row[i] : '';
+          const formatted = applyMappings(type, i, cellValue);
+          tableHtml += `<td>${escapeHtml(formatted)}</td>`;
+        }
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table>';
+      tableContainer.innerHTML = tableHtml;
+      renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+      let html = '';
+      if (totalPages > 1) {
+        // Botões de navegação: primeira e anterior
+        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(1)">Primeira</button>`;
+        html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
+        // Informação de página
+        html += `<span id="page-info">Página ${currentPage} de ${totalPages}</span>`;
+        // Botões de navegação: próxima e última
+        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
+        html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${totalPages})">Última</button>`;
+        // Botão para ir a uma página específica
+        html += `<button onclick="goToPagePrompt(${totalPages})">Ir para página...</button>`;
+      } else if (totalPages === 1) {
+        html += `<span id="page-info">Página 1 de 1</span>`;
+      }
+      paginationDiv.innerHTML = html;
+    }
+
+    // Exposta no escopo global para ser chamada a partir de atributos onclick
+    window.changePage = function (newPage) {
+      currentPage = newPage;
+      renderTable();
+    };
+
+    // Função para permitir que o usuário informe o número da página via prompt
+    window.goToPagePrompt = function (totalPages) {
+      const input = prompt('Digite o número da página (1 - ' + totalPages + '):');
+      if (input === null) return;
+      const num = parseInt(input, 10);
+      if (!isNaN(num) && num >= 1 && num <= totalPages) {
+        currentPage = num;
+        renderTable();
+      } else {
+        alert('Número de página inválido.');
+      }
+    };
+
+    // Mapeamento de índices de campos que devem ser tratados como datas (ddmmaaaa)
+    const dateFields = {
+      AGENCIAS: [9, 10], // Data abertura, data fechamento
+      CONTAS: [4, 5], // Data abertura, data encerramento
+      TITULARES: [18, 19, 20], // Data atualização renda, início relacionamento, fim relacionamento
+      EXTRATO: [5], // Data lançamento
+      ORIGEM_DESTINO: [], // Sem datas
+    };
+
+    // Mapeamento de índices de campos monetários (valores com duas casas decimais) para formatação
+    const monetaryFields = {
+      TITULARES: [17], // Valor Renda
+      EXTRATO: [9, 11], // Valor Lançamento, Valor Saldo
+      ORIGEM_DESTINO: [2], // Valor Transação
+      CONTAS: [],
+      AGENCIAS: [],
+    };
+
+    // Formata valores monetários colocando separadores de milhar e vírgula decimal
+    function formatMonetaryIfApplicable(type, index, value) {
+      if (!value) return value;
+      const indices = monetaryFields[type] || [];
+      if (!indices.includes(index)) return value;
+      // Remove espaços
+      let str = value.trim();
+      // Identifica negativo
+      let negative = false;
+      if (str.startsWith('-')) {
+        negative = true;
+        str = str.substring(1);
+      }
+      // Remove milhares e converte vírgulas para ponto
+      const cleaned = str.replace(/\./g, '').replace(/,/g, '.');
+      let num = parseFloat(cleaned);
+      if (isNaN(num)) return value;
+      // Se original não tinha separador decimal e for grande, assume centavos
+      if (!/[.,]/.test(str) && str.length > 3) {
+        num = num / 100;
+      }
+      const parts = num.toFixed(2).split('.');
+      const intPart = parts[0];
+      const decPart = parts[1];
+      const intWithSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return (negative ? '-' : '') + intWithSep + ',' + decPart;
+    }
+
+    // Formata datas no formato DD/MM/AAAA quando apropriado
+    function formatDateIfApplicable(type, index, value) {
+      if (!value) return value;
+      const indices = dateFields[type] || [];
+      if (indices.includes(index) && /^\d{8}$/.test(value)) {
+        const dd = value.substring(0, 2);
+        const mm = value.substring(2, 4);
+        const yyyy = value.substring(4, 8);
+        return dd + '/' + mm + '/' + yyyy;
+      }
+      return value;
+    }
+
+    // Mapeamento de códigos para significados
+    const tipoContaMap = {
+      '1': 'Corrente',
+      '2': 'Poupança',
+      '3': 'Investimento',
+      '4': 'Outros',
+    };
+    const movimentacaoContaMap = {
+      '1': 'Investigada com movimentação',
+      '2': 'Investigada sem movimentação',
+      '3': 'Conta relacionada',
+    };
+    const pessoaInvestigadaMap = {
+      '0': 'Não investigada',
+      '1': 'Investigada',
+    };
+    const tipoPessoaMap = {
+      '1': 'Pessoa natural',
+      '2': 'Pessoa jurídica',
+    };
+    const naturezaLancamentoMap = {
+      'C': 'Crédito',
+      'D': 'Débito',
+      '*': 'Outros',
+    };
+    const naturezaSaldoMap = {
+      'C': 'Saldo credor',
+      'D': 'Saldo devedor',
+    };
+    const situacaoIdentMap = {
+      '0': 'Fixo: sempre 0',
+    };
+    // Mapeamento para tipos de titular
+    function mapTipoTitular(value) {
+      if (!value) return value;
+      if (value === 'T') return 'Titular';
+      if (value === 'R') return 'Representante';
+      if (value === 'L') return 'Representante Legal';
+      if (value === 'P') return 'Procurador';
+      if (value === 'O') return 'Outros';
+      // Se for número, assume cotitular
+      if (!isNaN(parseInt(value, 10))) {
+        return `${value}º cotitular`;
+      }
+      return value;
+    }
+
+    // Mapeamento para tipo de lançamento (códigos 101-122 e 201-219)
+    const tipoLancamentoMap = {
+      '101': 'Cheques',
+      '102': 'Encargos',
+      '103': 'Estornos (débito)',
+      '104': 'Lançamento avisado (débito)',
+      '105': 'Tarifas',
+      '106': 'Aplicação',
+      '107': 'Empréstimo ou financiamento (débito)',
+      '108': 'Câmbio (débito)',
+      '109': 'CPMF',
+      '110': 'IOF',
+      '111': 'Imposto de renda',
+      '112': 'Pagamento de fornecedores (débito)',
+      '113': 'Pagamento de salário (débito)',
+      '114': 'Saque eletrônico',
+      '115': 'Ações (débito)',
+      '117': 'Transferência entre contas (débito)',
+      '118': 'Devolução da compensação (débito)',
+      '119': 'Devolução de cheque depositado',
+      '120': 'Transferência interbancária (débito)',
+      '121': 'Antecipação a fornecedores',
+      '122': 'OCAEROPS',
+      // Créditos
+      '201': 'Depósitos',
+      '202': 'Líquido de cobrança',
+      '203': 'Devolução de cheque',
+      '204': 'Estornos (crédito)',
+      '205': 'Lançamento avisado (crédito)',
+      '206': 'Resgate de aplicação',
+      '207': 'Empréstimo ou financiamento (crédito)',
+      '208': 'Câmbio (crédito)',
+      '209': 'Transferência interbancária (crédito)',
+      '210': 'Ações (crédito)',
+      '211': 'Dividendos',
+      '212': 'Seguros',
+      '213': 'Transferência entre contas (crédito)',
+      '214': 'Depósitos especiais',
+      '215': 'Devolução da compensação (crédito)',
+      '216': 'OCT',
+      '217': 'Pagamento de fornecedores (crédito)',
+      '218': 'Pagamentos diversos (crédito)',
+      '219': 'Pagamentos salariais (crédito)',
+    };
+
+    function applyMappings(type, index, value) {
+      // Não mapeia valores vazios
+      if (!value) return value;
+      // Formata datas e valores monetários primeiro se aplicável
+      let formatted = formatDateIfApplicable(type, index, value);
+      formatted = formatMonetaryIfApplicable(type, index, formatted);
+      switch (type) {
+        case 'CONTAS':
+          if (index === 3) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
+          if (index === 6) formatted = formatted + (movimentacaoContaMap[formatted] ? ` (${movimentacaoContaMap[formatted]})` : '');
+          return formatted;
+        case 'TITULARES':
+          if (index === 3) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
+          if (index === 4) formatted = mapTipoTitular(formatted);
+          if (index === 5) formatted = formatted + (pessoaInvestigadaMap[formatted] ? ` (${pessoaInvestigadaMap[formatted]})` : '');
+          if (index === 6) formatted = formatted + (tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '');
+          return formatted;
+        case 'EXTRATO':
+          if (index === 4) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
+          if (index === 8) formatted = formatted + (tipoLancamentoMap[formatted] ? ` (${tipoLancamentoMap[formatted]})` : '');
+          if (index === 10) formatted = formatted + (naturezaLancamentoMap[formatted] ? ` (${naturezaLancamentoMap[formatted]})` : '');
+          if (index === 12) formatted = formatted + (naturezaSaldoMap[formatted] ? ` (${naturezaSaldoMap[formatted]})` : '');
+          return formatted;
+        case 'ORIGEM_DESTINO':
+          if (index === 7) formatted = formatted + (tipoContaMap[formatted] ? ` (${tipoContaMap[formatted]})` : '');
+          if (index === 8) formatted = formatted + (tipoPessoaMap[formatted] ? ` (${tipoPessoaMap[formatted]})` : '');
+          if (index === 16) formatted = formatted + (situacaoIdentMap[formatted] ? ` (${situacaoIdentMap[formatted]})` : '');
+          return formatted;
+        default:
+          return formatted;
+      }
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
+      return text.replace(/[&<>"']/g, (m) => map[m]);
+    }
+  </script>
+</body>
+</html>
